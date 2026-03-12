@@ -1,0 +1,95 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedSaathi - Aapka Swasth Saathi</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+  <script src="chat.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <span class="header-logo" aria-hidden="true">🏥</span>
+      <div class="header-copy">
+        <h1 class="header-title">MedSaathi - मेड साथी</h1>
+        <p class="header-tagline">Aapka Swasth Saathi | आपका स्वस्थ साथी</p>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="connection-status" aria-live="polite">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-text" class="status-text">Connected</span>
+      </div>
+      <button id="btn-new-chat" class="btn-new-chat" type="button">New Chat</button>
+    </div>
+  </header>
+
+  <div id="crisis-banner" class="crisis-banner hidden" role="alert">
+    <div class="crisis-text">
+      <strong>Turant madad lein:</strong>
+      1860-2662-345 (Vandrevala) | 9152987821 (iCall) | 108 (Emergency)
+    </div>
+    <button id="crisis-close" class="crisis-close" type="button" aria-label="Crisis banner band karein">&times;</button>
+  </div>
+
+  <main id="chat-area" class="chat-area">
+    <section id="welcome-card" class="welcome-card">
+      <div class="welcome-emoji" aria-hidden="true">🙏</div>
+      <p class="welcome-text">
+        Namaste! Main MedSaathi hoon.<br>
+        Aap Hindi, English, ya Hinglish mein pooch sakte hain.<br>
+        Main aapki health se judi sawaalon mein madad karunga.
+      </p>
+
+      <div class="chip-row">
+        <button class="chip" type="button" data-query="बुखार में क्या लें?">बुखार में क्या लें?</button>
+        <button class="chip" type="button" data-query="Sugar mein kya khayein?">Sugar mein kya khayein?</button>
+        <button class="chip" type="button" data-query="Bacche ko khansi hai">Bacche ko khansi hai</button>
+      </div>
+    </section>
+
+    <div id="typing-indicator" class="typing-indicator hidden">
+      <div class="typing-bubble">
+        <span>MedSaathi soch raha hai...</span>
+        <div class="typing-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="input-area">
+    <div class="input-shell">
+      <textarea
+        id="message-input"
+        class="message-input"
+        rows="1"
+        placeholder="Apna sawaal Hindi ya English mein likhein..."
+        aria-label="Sawaal likhein"
+      ></textarea>
+
+      <button id="btn-send" class="btn-send" type="button" aria-label="Message bhejein">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+    <p class="emergency-bar">108 - Emergency | 1860-2662-345 - Mental Health</p>
+  </footer>
+
+  <div id="error-toast" class="error-toast hidden" role="status" aria-live="polite">
+    <span id="error-toast-text">Kuch gadbad ho gayi.</span>
+  </div>
+</body>
+</html>
