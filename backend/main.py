@@ -1,31 +1,31 @@
-"""
-MedSaathi — FastAPI Backend Server (The Conductor)
+﻿"""
+MedSaathi â€” FastAPI Backend Server (The Conductor)
 ====================================================
 
 This file wires ALL backend modules together into a single working API.
-It doesn't do any heavy lifting itself — it just calls the right files
+It doesn't do any heavy lifting itself â€” it just calls the right files
 in the right order for each user request.
 
 Full pipeline for every chat message:
-──────────────────────────────────────
-  Frontend → POST /chat → main.py orchestrates:
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Frontend â†’ POST /chat â†’ main.py orchestrates:
 
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Step 1: Session       → memory.py (create/get session)     │
-  │  Step 2: Guardrails    → guardrails.py (safety check)       │
-  │  Step 3: Query Rewrite → query_rewriter.py (optimize query) │
-  │  Step 4: Retrieval     → retriever.py (hybrid search)       │
-  │  Step 5: Reranking     → reranker.py (cross-encoder)        │
-  │  Step 6: History       → memory.py (get past turns)         │
-  │  Step 7: Generation    → generator.py (Gemini Flash)        │
-  │  Step 8: Save Memory   → memory.py (store this turn)        │
-  └─────────────────────────────────────────────────────────────┘
+  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  â”‚  Step 1: Session       â†’ memory.py (create/get session)     â”‚
+  â”‚  Step 2: Guardrails    â†’ guardrails.py (safety check)       â”‚
+  â”‚  Step 3: Query Rewrite â†’ query_rewriter.py (optimize query) â”‚
+  â”‚  Step 4: Retrieval     â†’ retriever.py (hybrid search)       â”‚
+  â”‚  Step 5: Reranking     â†’ reranker.py (cross-encoder)        â”‚
+  â”‚  Step 6: History       â†’ memory.py (get past turns)         â”‚
+  â”‚  Step 7: Generation    â†’ generator.py (Gemini Flash)        â”‚
+  â”‚  Step 8: Save Memory   â†’ memory.py (store this turn)        â”‚
+  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
   If guardrails block the query at Step 2, steps 3-7 are SKIPPED entirely.
   The user gets an immediate pre-written safe response.
 
 What is CORS?
-─────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Cross-Origin Resource Sharing. Without it, a browser running the frontend
   on http://localhost:3000 would refuse to talk to the API on http://localhost:8000
   because they're different "origins." CORS headers tell the browser:
@@ -33,14 +33,14 @@ What is CORS?
   during development; in production, restrict to your actual frontend domain.
 
 What are Pydantic models?
-─────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Pydantic validates incoming request data automatically. If someone sends
   {"query": 123} instead of {"query": "some text"}, FastAPI returns a 422
-  error with a helpful message — before our code even runs. This prevents
+  error with a helpful message â€” before our code even runs. This prevents
   crashes from bad input and documents the API shape via /docs.
 
 Why preload models on startup?
-──────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   The embedding model (~120MB) and reranker (~80MB) take 3-5 seconds each
   to load. If we loaded them on the first request, that user would wait
   10+ seconds for a response. By loading at startup, the server is ready
@@ -52,21 +52,30 @@ Test with:
     -d '{"query": "bukhar mein kya lena chahiye"}'
 """
 
+import sys
 import time
 import traceback
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 from rich.panel import Panel
 
-# ─── Load environment variables FIRST (before any module that reads them) ─────
+# â”€â”€â”€ Load environment variables FIRST (before any module that reads them) â”€â”€â”€â”€â”€
 load_dotenv()
 
-# ─── Backend module imports ───────────────────────────────────────────────────
+# Make absolute backend.* imports work when this file is run directly:
+#   uv run backend/main.py
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# â”€â”€â”€ Backend module imports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from backend.embeddings import get_embedding_model, get_collection  # noqa: E402
 from backend.retriever import hybrid_search  # noqa: E402
 from backend.reranker import rerank, get_reranker_model  # noqa: E402
@@ -91,7 +100,7 @@ from backend.guardrails import (  # noqa: E402
     QueryCategory,
 )
 
-# ─── Configuration ────────────────────────────────────────────────────────────
+# â”€â”€â”€ Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 HOST = "0.0.0.0"
 PORT = 8000
@@ -101,7 +110,7 @@ RERANK_TOP_N = 5           # Rerank down to top 5 (precise selection)
 console = Console(force_terminal=True)
 
 
-# ─── FastAPI App ──────────────────────────────────────────────────────────────
+# â”€â”€â”€ FastAPI App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app = FastAPI(
     title="MedSaathi API",
@@ -120,7 +129,7 @@ app.add_middleware(
 )
 
 
-# ─── Pydantic Request/Response Models ────────────────────────────────────────
+# â”€â”€â”€ Pydantic Request/Response Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ChatRequest(BaseModel):
     query: str
@@ -147,17 +156,17 @@ class HealthResponse(BaseModel):
     model: str
 
 
-# ─── Pipeline Logging Helper ─────────────────────────────────────────────────
+# â”€â”€â”€ Pipeline Logging Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def log_pipeline_step(step: int, total: int, name: str, detail: str, time_ms: float) -> None:
     """Print a colored pipeline step for server-side debugging."""
     console.print(
         f"  [dim][Step {step}/{total}][/dim] {name} "
-        f"[green]OK[/green] [dim]({time_ms:.0f}ms)[/dim] — {detail}"
+        f"[green]OK[/green] [dim]({time_ms:.0f}ms)[/dim] â€” {detail}"
     )
 
 
-# ─── Timing Middleware ────────────────────────────────────────────────────────
+# â”€â”€â”€ Timing Middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.middleware("http")
 async def timing_middleware(request: Request, call_next):
@@ -179,18 +188,18 @@ async def timing_middleware(request: Request, call_next):
 
     console.print(
         f"[dim]{request.method}[/dim] {request.url.path} "
-        f"— [{color}]{duration_ms:.0f}ms[/{color}]"
+        f"â€” [{color}]{duration_ms:.0f}ms[/{color}]"
     )
     return response
 
 
-# ─── Startup Event ────────────────────────────────────────────────────────────
+# â”€â”€â”€ Startup Event â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.on_event("startup")
 async def startup():
     """
     Preload ML models and verify ChromaDB connection on server start.
-    This ensures the first user request is fast — no model loading delay.
+    This ensures the first user request is fast â€” no model loading delay.
     """
     console.print("\n[bold cyan]Starting MedSaathi API...[/bold cyan]\n")
 
@@ -210,14 +219,14 @@ async def startup():
 
     # Check ChromaDB vector store
     chunk_count = 0
-    vector_status = "Empty — run ingest.py first"
+    vector_status = "Empty â€” run ingest.py first"
     try:
         collection = get_collection()
         chunk_count = collection.count()
         vector_status = f"Ready ({chunk_count} chunks)"
     except SystemExit:
         # get_collection() calls sys.exit if collection not found
-        vector_status = "Not found — run ingest.py first"
+        vector_status = "Not found â€” run ingest.py first"
     except Exception as e:
         vector_status = f"Error: {e}"
 
@@ -235,12 +244,12 @@ async def startup():
     ))
 
 
-# ─── Health Check ─────────────────────────────────────────────────────────────
+# â”€â”€â”€ Health Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
-    Health check endpoint — used by frontend to verify API is running.
+    Health check endpoint â€” used by frontend to verify API is running.
     Also reports vector store status so the UI can warn if ingestion needed.
     """
     chunk_count = 0
@@ -260,7 +269,7 @@ async def health_check():
     )
 
 
-# ─── Session Endpoints ───────────────────────────────────────────────────────
+# â”€â”€â”€ Session Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.post("/session/new", response_model=SessionResponse)
 async def new_session():
@@ -292,7 +301,7 @@ async def delete_session(session_id: str):
     )
 
 
-# ─── Get Session History ──────────────────────────────────────────────────────
+# â”€â”€â”€ Get Session History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/session/{session_id}/history")
 async def session_history(session_id: str):
@@ -316,7 +325,7 @@ async def session_history(session_id: str):
     }
 
 
-# ─── Helper: Convert Memory Turns to Generator History Format ─────────────────
+# â”€â”€â”€ Helper: Convert Memory Turns to Generator History Format â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _build_history_pairs(turns: list[ConversationTurn]) -> list[dict]:
     """
@@ -340,31 +349,31 @@ def _build_history_pairs(turns: list[ConversationTurn]) -> list[dict]:
     return pairs
 
 
-# ─── Main Chat Endpoint ──────────────────────────────────────────────────────
+# â”€â”€â”€ Main Chat Endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    The main chat endpoint — runs the FULL RAG pipeline.
+    The main chat endpoint â€” runs the FULL RAG pipeline.
 
-    Pipeline: session → guardrails → rewrite → retrieve → rerank → history → generate → save
+    Pipeline: session â†’ guardrails â†’ rewrite â†’ retrieve â†’ rerank â†’ history â†’ generate â†’ save
     """
     pipeline_start = time.time()
     total_steps = 8
 
     try:
-        # ── Step 1: Session handling ──────────────────────────────────
+        # â”€â”€ Step 1: Session handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         session_id = request.session_id or create_session()
         log_pipeline_step(1, total_steps, "Session", f"id={session_id[:8]}...", (time.time() - t) * 1000)
 
-        # ── Step 2: Guardrails ────────────────────────────────────────
+        # â”€â”€ Step 2: Guardrails â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         guard_result = run_all_checks(request.query)
         log_pipeline_step(2, total_steps, "Guardrails", f"category={guard_result.category.value}", (time.time() - t) * 1000)
 
         if guard_result.is_blocked:
-            # Query is blocked — return safe response without touching the LLM
+            # Query is blocked â€” return safe response without touching the LLM
             safe_response = guard_result.safe_response or FALLBACK_RESPONSE_HINDI
 
             # Save to memory so chat history shows this exchange
@@ -386,30 +395,30 @@ async def chat(request: ChatRequest):
                 rewritten_query=request.query,
             )
 
-        # ── Step 3: Query rewriting ───────────────────────────────────
+        # â”€â”€ Step 3: Query rewriting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         query_info = process_query(request.query)
         rewritten = query_info["best"]
         language = query_info["language"]
         log_pipeline_step(3, total_steps, "Rewrite", f"'{request.query[:30]}' -> '{rewritten[:30]}'", (time.time() - t) * 1000)
 
-        # ── Step 4: Retrieval ─────────────────────────────────────────
+        # â”€â”€ Step 4: Retrieval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         retrieved_chunks = hybrid_search(rewritten, n_results=RETRIEVAL_N_RESULTS)
         log_pipeline_step(4, total_steps, "Retrieval", f"{len(retrieved_chunks)} chunks", (time.time() - t) * 1000)
 
-        # ── Step 5: Reranking ─────────────────────────────────────────
+        # â”€â”€ Step 5: Reranking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         reranked_chunks = rerank(rewritten, retrieved_chunks, top_n=RERANK_TOP_N)
         log_pipeline_step(5, total_steps, "Reranking", f"top {len(reranked_chunks)} chunks", (time.time() - t) * 1000)
 
-        # ── Step 6: Get conversation history ──────────────────────────
+        # â”€â”€ Step 6: Get conversation history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         history_turns = get_history(session_id)
         history_pairs = _build_history_pairs(history_turns)
         log_pipeline_step(6, total_steps, "History", f"{len(history_pairs)} past exchanges", (time.time() - t) * 1000)
 
-        # ── Step 7: Generate response ─────────────────────────────────
+        # â”€â”€ Step 7: Generate response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         result = generate(
             query=request.query,
@@ -426,7 +435,7 @@ async def chat(request: ChatRequest):
 
         log_pipeline_step(7, total_steps, "Generation", f"{len(answer)} chars", (time.time() - t) * 1000)
 
-        # ── Step 8: Save to memory ────────────────────────────────────
+        # â”€â”€ Step 8: Save to memory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         t = time.time()
         add_message(session_id, "user", request.query, language)
         add_message(session_id, "assistant", answer, language)
@@ -450,7 +459,7 @@ async def chat(request: ChatRequest):
         console.print(f"[red]Pipeline error: {type(e).__name__}: {e}[/red]")
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
-        # Always return a safe fallback — never crash on the user
+        # Always return a safe fallback â€” never crash on the user
         session_id = request.session_id or "error"
         return ChatResponse(
             answer=FALLBACK_RESPONSE_HINDI,
@@ -463,15 +472,15 @@ async def chat(request: ChatRequest):
         )
 
 
-# ─── Streaming Chat Endpoint ─────────────────────────────────────────────────
+# â”€â”€â”€ Streaming Chat Endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     """
-    Streaming version of /chat — returns response as Server-Sent Events (SSE).
+    Streaming version of /chat â€” returns response as Server-Sent Events (SSE).
 
     What is SSE (Server-Sent Events)?
-    ─────────────────────────────────
+    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       A protocol for the server to push data to the client as it becomes
       available. Instead of waiting for the full response, the frontend
       receives small text chunks every ~50-100ms:
@@ -490,7 +499,7 @@ async def chat_stream(request: ChatRequest):
       newlines. The final "[DONE]" event signals the stream is complete.
     """
     try:
-        # ── Steps 1-6: Same as /chat (non-streaming) ──
+        # â”€â”€ Steps 1-6: Same as /chat (non-streaming) â”€â”€
         session_id = request.session_id or create_session()
 
         guard_result = run_all_checks(request.query)
@@ -515,7 +524,7 @@ async def chat_stream(request: ChatRequest):
         history_turns = get_history(session_id)
         history_pairs = _build_history_pairs(history_turns)
 
-        # ── Step 7: Streaming generation ──
+        # â”€â”€ Step 7: Streaming generation â”€â”€
         # Collect full response for memory while streaming to client
         async def response_stream():
             full_response = []
@@ -554,7 +563,13 @@ async def chat_stream(request: ChatRequest):
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
 
-# ─── Main Entry Point ────────────────────────────────────────────────────────
+# Serve frontend from the same FastAPI app so only one process is needed.
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+
+
+# â”€â”€â”€ Main Entry Point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if __name__ == "__main__":
     import uvicorn
@@ -574,3 +589,5 @@ if __name__ == "__main__":
         port=PORT,
         reload=True,   # Auto-restart on file changes during development
     )
+
+

@@ -49,6 +49,7 @@ Operational note:
 from __future__ import annotations
 
 import json
+import sys
 import os
 import time
 from datetime import datetime, timezone
@@ -89,6 +90,12 @@ except Exception as import_error:  # pragma: no cover - runtime environment depe
     context_precision = None
     RAGAS_AVAILABLE = False
     RAGAS_IMPORT_ERROR = import_error
+
+# Make absolute backend.* imports work when this file is run directly:
+#   uv run backend/evaluator.py
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.generator import GENERATOR_MODEL, generate, get_generator_llm
 from backend.query_rewriter import process_query
@@ -729,3 +736,5 @@ if __name__ == "__main__":
     except Exception as exc:  # pragma: no cover - runtime error path
         console.print(f"[red]Evaluation failed:[/red] {type(exc).__name__}: {exc}")
         raise
+
+
